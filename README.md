@@ -32,6 +32,8 @@ Another alternative to install the environment from the `requirements_py36.txt`f
 
 ## Versioning
 
+v1.0
+
 ## Authors
 
 * **Sergio Navarro** - *Initial work* - [Sergio-Navarro-Tuch](https://github.com/Sergio-Navarro-Tuch)
