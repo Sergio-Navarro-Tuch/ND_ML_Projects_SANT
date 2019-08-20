@@ -18,7 +18,7 @@ train:
       --gpu: If True, the system will attempt to run on gpu if one is available, otherwise it will only attempt to run on cpu (just boolean values 'True' or 'False'). default=True
 ```
       outputs:
-          Training results plots
+          Training results
           Saved checkpoint
 ---
 predict:
