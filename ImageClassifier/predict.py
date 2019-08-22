@@ -67,7 +67,7 @@ gpu=parsargs.gpu
 
 #------------------------------------------------------------#
 #Data loaders
-trainloader,testloader,validloader,numcats=FAID.data_loading_fun(data_dir)
+#trainloader,testloader,validloader,numcats=FAID.data_loading_fun(data_dir)
 
 #------------------------------------------------------------#
 #Image Loader (chooses random image when none selected
@@ -81,7 +81,7 @@ else:
 
 #------------------------------------------------------------#
 #checkpoint loading
-model,optimizer=FAID.checkload(checkpath)
+model,optimizer,checkpoint=FAID.checkload(checkpath)
 
 #------------------------------------------------------------#
 #Categories names loader
@@ -91,7 +91,7 @@ with open(catnamepath, 'r') as f:
 #------------------------------------------------------------#
 #Probabilities, top labels and categories names recovery 
 
-probs,classes,names = FAID.predict(ImageOrig, model,topk,catnamepath,gpu)
+probs,classes,names = FAID.predict(ImageOrig, model,topk,catnamepath,gpu,checkpoint)
 probscpu=probs.detach().to("cpu").numpy().flatten()
 print("probabilities: ",probscpu)
 print("classes: ",classes)
