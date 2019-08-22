@@ -17,7 +17,9 @@ import torch  #importing pytorch module
 from torch import nn  #from Pytorch import Neural Networks
 from torch import optim
 import torchvision
-from torchvision import datasets, transforms, models
+from torchvision import datasets
+from torchvision import transforms
+from torchvision import models
 import torchvision.transforms as transforms
 from torch.autograd import Variable
 from collections import OrderedDict
@@ -30,7 +32,8 @@ from PIL import Image
 import argparse
 
 import numpy as np
-import os, random
+import os
+import random
 #--------------------------------------------------------------------#
 
 #---------------------------------------------------------------------#
@@ -69,10 +72,15 @@ def Netset(architecture,dropout,hidden_layer1,learn_rate,outputs,gpu):
                                               ('fc2', nn.Linear(hidden_layer1, outputs)),
                                               ('output', nn.LogSoftmax(dim=1))
                                               ]))
+    if architecture=='resnet50':
+        model.fc=classifier
+        optimizer=optim.Adam(model.fc.parameters(),lr=learn_rate)
+    else:
+        model.classifier=classifier
+        optimizer=optim.Adam(model.classifier.parameters(),lr=learn_rate)
     
-    model.classifier=classifier
+    
     criterion=nn.NLLLoss()
-    optimizer=optim.Adam(model.classifier.parameters(),lr=learn_rate)
     model.to(gpucheck(gpu))
     
     return model,criterion,optimizer,infeats
@@ -210,7 +218,7 @@ def checkload(path):
             optimizer: loaded optimizer
     '''
     if torch.cuda.is_available():
-        checkpoint = torch.load(path)
+        checkpoint=torch.load(path)
         gpu=True
     else:
         checkpoint=torch.load(path, map_location=lambda storage, loc: storage)
@@ -218,21 +226,27 @@ def checkload(path):
          
     
         
-    architecture=checkpoint['architecture']
+    architecture=checkpoint['architecture']    
     dropout=checkpoint['dropout']
     hidden_layer1=checkpoint['hidden_layer1']
     learn_rate=checkpoint['lr']
     outputs=checkpoint['output_size']
     
     modelnew,criterion,optimizernew,infeats =Netset(architecture,dropout,hidden_layer1,learn_rate,outputs,gpu)
-        
-    modelnew.classifier = checkpoint['classifier']
+    
+    if architecture=='resnet50':
+        modelnew.fc=checkpoint['classifier']
+        optimizernew=optim.Adam(modelnew.fc.parameters(),lr=learn_rate)
+    else:        
+        modelnew.classifier=checkpoint['classifier']
+        optimizernew=optim.Adam(modelnew.classifier.parameters(),lr=learn_rate)
+    
     modelnew.load_state_dict(checkpoint['state_dict'])
     modelnew.epochs=checkpoint['epoch']
     modelnew.class_to_idx=checkpoint['class_to_idx']
     optimizernew.load_state_dict(checkpoint['optimizer_state_dict'])
     
-    return modelnew,optimizernew
+    return modelnew,optimizernew,checkpoint
 #---------------------------------------------------------------------#
 
 #---------------------------------------------------------------------#
@@ -244,15 +258,29 @@ def process_image3(image):
     Returns: img: an Numpy array
     '''
     # Open and load image
-    image = Image.open(image)
-    image.load()
+    imgO = Image.open(image)
+    imgO.load()
+    #--------------------Eliminated to comply with suggestion-----------#    
+    #PILImgTransforms=transforms.Compose([transforms.Resize(256),
+    #                                    transforms.CenterCrop(224)])
+    #PILimg=PILImgTransforms(image)
+    #--------------------Eliminated to comply with suggestion-----------#
     
-    PILImgTransforms=transforms.Compose([transforms.Resize(256),
-                                        transforms.CenterCrop(224)])
-    PILimg=PILImgTransforms(image)
+    #Image resizing through thumbnail
+    imgO.thumbnail((256,256),Image.ANTIALIAS)
+    
+    
+    #Image cropping
+    width_orig, height_orig = imgO.size #get size of the thumbnail
+    left=(width_orig-224)/2
+    top=(height_orig-224)/2
+    right=width_orig-(width_orig-224)/2
+    bottom=height_orig-(height_orig-224)/2
+    imgP=imgO.crop((left, top, right, bottom)) #img = img.crop((left, top, right, bottom))
+    print("cropped image:",imgP.size)
     
     #Normalizing
-    img = np.array(PILimg)/255
+    img = np.array(imgP)/255
     mean = np.array([0.485, 0.456, 0.406]) 
     std = np.array([0.229, 0.224, 0.225]) 
     img = (img - mean)/std
@@ -271,7 +299,7 @@ def img_viewing(image_path,probs,classes,names_cats):
           classes: predicted classes
           
     '''
-    figure=Image.open(image_path)
+    figure=Image.open(image_path)    
     plt.rcParams["figure.figsize"] = (15,10)
     
     plt.subplot(2,1,1)
@@ -282,16 +310,15 @@ def img_viewing(image_path,probs,classes,names_cats):
     plt.title("Top Predictions",loc='center')
     plt.xlabel("Probability")
     plt.barh(names_cats,probs)
-    
-
-    
+        
     plt.show()
+    plt.savefig('predict_results.png')
 
 #---------------------------------------------------------------------#
 
 #---------------------------------------------------------------------#
 #prediction
-def predict(image_path, model,topk,catnamepath,gpu):
+def predict(image_path, model,topk,catnamepath,gpu,checkpoint):
     ''' Predict the class (or classes) of an image using a trained deep learning model.
     Args:{image_path: path to the image to predict
           model: applied model
@@ -300,6 +327,8 @@ def predict(image_path, model,topk,catnamepath,gpu):
     '''
     
     # TODO: Implement the code to predict the class from an image file
+    model.class_to_idx = checkpoint['class_to_idx']
+    c2idx= model.class_to_idx
     #put the model in evaluation mode to drop dropout
     model.eval()
     
@@ -317,28 +346,48 @@ def predict(image_path, model,topk,catnamepath,gpu):
     #image processing
     img=process_image3(image_path)
     
+    #-----------[Suppressed to adapt for PIL implementation]----------------------------------#
     #transform the 2D image into a 1D vector
-    img=np.expand_dims(img, 0)  # alternative img.unsqueeze_(0)
+    #img=np.expand_dims(img, 0)  # alternative img.unsqueeze_(0)
+    #-----------[Suppressed to adapt for PIL implementation]----------------------------------#
     
     #Transfer image for input into GPU or CPU
-    img=torch.from_numpy(img).float()
-    inputImg=Variable(img).to(device)
+    img1=torch.from_numpy(img).float()    
+    img2=img1.unsqueeze_(0)
+    inputImg=Variable(img2).to(device)
     #print(img)
     
     #run the image through the model
     logpsPred=model.forward(inputImg)
     ps = torch.exp(logpsPred)
-    probs,labels=ps.topk(topk,dim=1)
-    #print(probs)
+    
+    #Probabilities and labels without index correction    
+    probs,indexRef=ps.topk(topk,dim=1)
+    indexRef1=indexRef.view(-1)
+    print("indexref:",indexRef1)
+    
+    #index correction acquisition
+    indexesC=[]
+    for i in range(len(c2idx)):
+        indexesC.append(list(model.class_to_idx.items())[i][0])
+    
+    #labels acquisition
+    labels = []
+    for i in range(topk):
+        labels.append(indexesC[indexRef1[i]])
+    
     probsclone=probs.clone().to("cpu")
     #top_probs=probsclone.numpy().flatten()
     
-    print("labels in GPU?: ",labels.is_cuda)
+    #print("labels in GPU?: ",labels.is_cuda)
     print("original labels: ",labels)
-    clonelabels=labels.clone().to("cpu")
-    print("Cloned labels in GPU?: ",clonelabels.is_cuda)
-    print("Cloned labels: ",clonelabels)
-    top_labels=clonelabels.numpy().flatten()
+    #--------[No longer used as labels is now a list]-----#
+    #clonelabels=labels.clone().to("cpu")
+    #print("Cloned labels in GPU?: ",clonelabels.is_cuda)
+    #print("Cloned labels: ",clonelabels)
+    #top_labels=clonelabels.numpy().flatten()
+    #--------[No longer used as labels is now a list]-----#
+    top_labels=labels
     print("top Labels index: ",top_labels)    
     
     with open(catnamepath, 'r') as f:

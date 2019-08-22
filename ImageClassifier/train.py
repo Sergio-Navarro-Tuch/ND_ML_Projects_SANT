@@ -95,15 +95,17 @@ device=FAID.gpucheck(gpu)
 
 #-----------------------------------------------------------#
 #Network training
-epochs =epochs
+
 print("Training begin")
 train_losses,test_losses,accuracy_registry,time_batch,time_epoch=[],[],[],[],[]
 for epoch in range(epochs):
     steps = 0
+    Valsteps=0
     running_loss = 0
     start_epoch=time.time()
     for inputs, labels in trainloader:
         steps += 1
+        Valsteps+=1
         # Move input and label tensors to the default device
         inputs, labels = inputs.to(device), labels.to(device)
         
@@ -125,45 +127,48 @@ for epoch in range(epochs):
         
 #---------------------------------------------------------------------------------------------#
 #--------------------------[ Validation on test data ]------------------------------------#        
-        
-    #testing and measurement register for each batch
-        test_loss = 0
-        accuracy = 0
-        model.eval()    
+        if Valsteps==10 or steps==len(trainloader):
+        #testing and measurement register for each batch
+            test_loss = 0
+            accuracy = 0
+            model.eval()
+            
+            Valsteps=0  #Restart Valstep counter
 
-        # Turn off gradients for validation, saves memory and computations
-        with torch.no_grad():
-            for inputs, labels in testloader:
-                inputs, labels = inputs.to(device), labels.to(device)
-                logps = model.forward(inputs)
-                batch_loss = criterion(logps, labels)
-                test_loss += batch_loss.item()
+            # Turn off gradients for validation, saves memory and computations
+            with torch.no_grad():
+                for inputs, labels in testloader:
+                    inputs, labels = inputs.to(device), labels.to(device)
+                    logps = model.forward(inputs)
+                    batch_loss = criterion(logps, labels)
+                    test_loss += batch_loss.item()
 
-                # Calculate accuracy
-                ps = torch.exp(logps)
-                top_p, top_class = ps.topk(1, dim=1)
-                equals = top_class == labels.view(*top_class.shape)
-                accuracy += torch.mean(equals.type(torch.FloatTensor)).item()
-                
-                train_losses.append(running_loss)
-                test_losses.append(test_loss/len(testloader))
-                accuracy_registry.append(accuracy/len(testloader))
+                    # Calculate accuracy
+                    ps = torch.exp(logps)
+                    top_p, top_class = ps.topk(1, dim=1)
+                    equals = top_class == labels.view(*top_class.shape)
+                    accuracy += torch.mean(equals.type(torch.FloatTensor)).item()
 
+                    train_losses.append(running_loss)
+                    test_losses.append(test_loss/len(testloader))
+                    accuracy_registry.append(accuracy/len(testloader))
+
+            print(f"Epoch {epoch+1}/{epochs}.. "
+                  f"Train loss: {running_loss}.. "
+                  f"Test loss: {test_loss/len(testloader):.3f}.. "
+                  f"Test accuracy: {accuracy/len(testloader):.3f}.."
+                  f"Batch time: {timestep:.3f}")
+            
         print(f"Epoch {epoch+1}/{epochs}.. "
-              f"Train loss: {running_loss}.. "
-              f"Test loss: {test_loss/len(testloader):.3f}.. "
-              f"Test accuracy: {accuracy/len(testloader):.3f}.."
-              f"Batch time: {timestep:.3f}")
-        print(f"Step: {steps}/{len(trainloader)}..")
+            f"Step: {steps}/{len(trainloader)}..")
         running_loss = 0
         model.train()
         time_epoch.append(time.time()-start_epoch)
 #---------------------[End training]------------------------#
 
 #-----------------------------------------------------------#
-#printing training results
-
-# Results, loss and training time plotting
+#Saving training results to file "train_results_plots.png"
+# Results, loss and training time plotting 
 plt.rcParams["figure.figsize"] = (15,10)
 
 plt.subplot(2,2,1)
@@ -194,21 +199,16 @@ plt.title("Training Epoch time")
 plt.xlabel("Epoch*100")
 plt.ylabel("Time[s]")
 plt.legend(frameon=False)
+
+plt.show()
+plt.savefig('train_results_plots.png')
 #-------------------[End train results plotting]------------#
 
 #-----------------------------------------------------------#
 #save checkpoint
-pathsave=pathsave
-infeats=infeats
-hidden_layer1=hidden_layer1
-architecture=architecture
 outputs=numcats
-dropout=dropout
-learn_rate=learn_rate
-epoch=epochs
 
-
-FAID.checksave(pathsave,infeats,hidden_layer1,architecture,outputs,dropout,learn_rate,data_path,model,epoch,optimizer)
+FAID.checksave(pathsave,infeats,hidden_layer1,architecture,outputs,dropout,learn_rate,data_path,model,epochs,optimizer)
 
 #-----------------------------------------------------------#
 #End of program printing
